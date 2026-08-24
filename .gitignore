@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.DS_Store
+node_modules/
+.npm-cache/
+.next/
+results/*.png
+results/*.csv
+results/*.jsonl
+results/*.json
+contracts/lib/
+contracts/out/
+contracts/cache/

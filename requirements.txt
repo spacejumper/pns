@@ -1,0 +1,12 @@
+eth-account>=0.13.0
+eth-abi>=5.1.0
+web3>=7.0.0
+river>=0.22.0
+pyod>=2.0.0
+scikit-learn>=1.5.0
+numpy>=2.0.0
+pandas>=2.2.0
+matplotlib>=3.9.0
+PyYAML>=6.0.0
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
