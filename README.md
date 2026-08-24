@@ -43,7 +43,38 @@ Start the web app:
 uvicorn app:app --reload
 ```
 
-Then open `http://localhost:3000`.
+Then open `http://localhost:8000`.
+
+## How the guard works
+
+The browser demonstrator and the experiment harness use the same guard
+pipeline. Each payment request passes through four stages before execution:
+
+- **S0 — Mandate:** verifies the user's signed mandate and checks that it has
+  not expired. A failed signature or expired mandate blocks immediately.
+- **S1 — Policy:** checks hard transaction constraints such as the maximum
+  amount per transaction and the spending budget for the current time window.
+  Recipient allowlisting and rate behavior also contribute policy signals. A
+  hard policy violation blocks before the payment is sent.
+- **S2 — Provenance:** measures whether the payment details came from an
+  untrusted source, such as an invoice containing an indirect prompt injection.
+  This produces a taint value from `0.0` (trusted) to `1.0` (untrusted).
+- **S3 — Anomaly:** scores the request against the rolling transaction history
+  using River's streaming `HalfSpaceTrees` detector. Larger values indicate
+  behavior that is less consistent with the recent payment pattern.
+
+If S0 and S1 pass, the guard combines the risk signals into one score:
+
+```text
+score = 0.6 × anomaly + 0.3 × provenance taint + 0.1 × soft-policy flags
+```
+
+The default block threshold is `0.75`. A score above the threshold produces a
+`BLOCK`; otherwise the request is `ALLOW` or `ALERT` according to the alert
+threshold. Hard S0/S1 failures take priority over the weighted score. A
+blocked request is never transferred by the demonstrator's chain simulator;
+an allowed or alert request is transferred and its balances are streamed to
+the browser.
 
 ## Optional chain setup (Foundry + Anvil)
 
@@ -63,7 +94,7 @@ anvil --block-time 1
 - `experiments/`: C1/C3/C4 runners
 - `contracts/`: Solidity contracts and deploy script
 - `results/`: generated outputs
-- `agentguard-demo/`: Next.js demonstrator UI for metrics and system flow
+- `app.py` and `static/`: FastAPI/SSE demonstrator UI for live decisions and system flow
 
 ## Reproducible workflow
 

@@ -68,6 +68,7 @@ class AgentGuard:
 
         allowed_recipients = {a.lower() for a in mandate.get("allowed_recipients", [])}
         if req.recipient.lower() not in allowed_recipients:
+            hard_violation = True
             reasons.append("recipient_not_allowlisted")
 
         soft_flags = 0

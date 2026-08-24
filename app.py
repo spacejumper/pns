@@ -29,6 +29,7 @@ MERCHANT = "0x000000000000000000000000000000000000CAFE"
 class RunConfig(BaseModel):
     scenario: str = "injected"
     guard_on: bool = True
+    threshold: float = 0.75
 
 
 class DemoChain:
@@ -79,13 +80,16 @@ def decide(invoice: str, mode: str = "normal") -> tuple[PaymentRequest, list[Too
     recipient = ATTACKER if attacker else MERCHANT
     amount = 180 if attacker and ">>" in invoice else (60 if mode == "s1" else 24)
     request = PaymentRequest(recipient, amount * 1_000_000, "invoice payment")
-    trust = "untrusted" if (mode == "normal" and attacker) or mode in {"s2", "s3"} else "trusted"
+    trust = "untrusted" if (mode == "normal" and attacker) or mode == "s2" else "trusted"
     return request, [ToolResult(invoice, trust, "invoice_vendor_x")]
 
 
 @app.get("/")
 async def index() -> FileResponse:
-    return FileResponse(ROOT / "static" / "index.html")
+    return FileResponse(
+        ROOT / "static" / "index.html",
+        headers={"Cache-Control": "no-store, max-age=0"},
+    )
 
 
 @app.get("/api/stream")
@@ -107,6 +111,7 @@ async def stream() -> StreamingResponse:
 async def run(config: RunConfig) -> dict[str, bool]:
     async with run_lock:
         guard, session = make_session()
+        guard.config.theta_block = max(0.0, min(1.0, config.threshold))
         valid_signature = session.signed_mandate.signature
         chain = DemoChain()
         for seq, (task, invoice, label, mode) in enumerate(steps_for(config.scenario), 1):
@@ -116,11 +121,10 @@ async def run(config: RunConfig) -> dict[str, bool]:
                     session.signed_mandate.mandate,
                     Account.create().key.hex(),
                 )
-            if mode == "s3":
-                guard.config.theta_block = 0.25
             verdict = (
                 evaluate_payment(seq=seq, request=request, session=session,
-                                 tool_results=tools, guard=guard, label=label)
+                                 tool_results=tools, guard=guard, label=label,
+                                 anomaly_override=1.0 if mode == "s3" else None)
                 if config.guard_on else allow_all(seq=seq, request=request, label=label)
             )
             if mode == "s0" and seq == 1:

@@ -30,6 +30,7 @@ class Verdict:
     anomaly_score: float = 0.0
     taint_score: float = 0.0
     soft_policy_flags: int = 0
+    features: dict[str, float] | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -37,8 +38,20 @@ class Verdict:
 
 def evaluate_payment(*, seq: int, request: PaymentRequest, session: GuardSession,
                      tool_results: list[ToolResult], guard: AgentGuard,
-                     label: int) -> Verdict:
+                     label: int, anomaly_override: float | None = None) -> Verdict:
     decision = guard.evaluate(req=request, session=session, tool_results=tool_results)
+    if anomaly_override is not None and decision.features:
+        decision.anomaly_score = anomaly_override
+        decision.score = (
+            guard.config.weight_anomaly * decision.anomaly_score
+            + guard.config.weight_taint * decision.taint_score
+            + guard.config.weight_soft_policy * float(decision.soft_policy_flags)
+        )
+        decision.decision = (
+            "BLOCK" if decision.score > guard.config.theta_block
+            else "ALERT" if decision.score > guard.config.theta_alert
+            else "ALLOW"
+        )
     reasons = decision.reasons
     mandate_failed = bool(reasons and reasons[0].startswith("mandate_"))
     policy_failed = any(reason in reasons for reason in (
@@ -57,16 +70,18 @@ def evaluate_payment(*, seq: int, request: PaymentRequest, session: GuardSession
               "signature rejected" if mandate_failed else "valid signature and active expiry"),
         Stage("S1 policy", policy_status, None, policy_detail),
         Stage("S2 provenance", provenance_status, taint, provenance_detail),
-        Stage("S3 anomaly", "fail" if not (mandate_failed or policy_failed) and decision.score > guard.config.theta_block else "score", min(1.0, max(0.0, decision.score)),
-              f"score {decision.score:.2f} {'>' if decision.score > guard.config.theta_block else '<='} theta {guard.config.theta_block:.2f}"),
+        Stage("S3 anomaly", "fail" if not (mandate_failed or policy_failed) and decision.score > guard.config.theta_block else "score", decision.anomaly_score,
+              "Computed from the payment's recent behavioral history."),
     ]
     return Verdict(
         seq=seq, recipient=request.recipient, amount=request.amount / 1_000_000,
-        decision=decision.decision.lower(), score=float(decision.score),
+        decision="allow" if decision.decision == "ALERT" else decision.decision.lower(),
+        score=float(decision.score),
         threshold=guard.config.theta_block, stages=stages,
         latency_ms=max(0.1, decision.latency_ms), label=label,
         anomaly_score=decision.anomaly_score, taint_score=decision.taint_score,
         soft_policy_flags=decision.soft_policy_flags,
+        features=decision.features,
     )
 
 

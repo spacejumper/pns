@@ -79,6 +79,27 @@
         align-items: center;
         gap: 6px;
       }
+      .threshold-control {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .threshold-control[hidden] {
+        display: flex;
+        visibility: hidden;
+      }
+      .threshold-input {
+        width: 62px;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 7px 6px;
+        color: var(--ink);
+        background: var(--white);
+        font:
+          12px ui-monospace,
+          SFMono-Regular,
+          monospace;
+      }
       .label,
       .eyebrow {
         font-size: 11px;
@@ -479,6 +500,10 @@
       .stage p {
         margin: 3px 0 0;
       }
+      .stage-evidence {
+        color: var(--ink);
+        font-size: 11px;
+      }
       .invoice {
         grid-column: 1/-1;
         background: #1e2930;
@@ -590,6 +615,19 @@
             class="slider"
           ></span
         ></label>
+        <div id="threshold-control" class="threshold-control">
+          <label class="label" for="threshold">Block &gt;</label>
+          <input
+            id="threshold"
+            class="threshold-input"
+            type="number"
+            min="0"
+            max="1"
+            step="0.05"
+            value="0.75"
+            aria-label="Block threshold"
+          />
+        </div>
         <div class="scenario-control">
           <span class="label">Scenario</span
           ><select id="scenario">
@@ -669,6 +707,8 @@
           <h3>Stage tour</h3>
           <p>
             Four requests, one teaching case per stage: S0, S1, S2, then S3.
+            Request 4 uses the header cutoff input; set it below 0.60 to see S3
+            block.
           </p>
           <div class="scenario-sample">
             <span class="scenario-sample-line">#1 mandate · #2 policy</span>
@@ -744,6 +784,42 @@
           attacker: "0x000000000000000000000000000000000000DEAD",
           merchant: "0x000000000000000000000000000000000000CAFE",
         };
+      const stageDescriptions = {
+        "S0 mandate":
+          "Checks that the user's authorization is authentic and still valid.",
+        "S1 policy":
+          "Checks that the amount, recipient, and spending limits follow the mandate.",
+        "S2 provenance":
+          "Checks whether payment details came from a trusted or untrusted source.",
+        "S3 anomaly":
+          "Checks whether the payment looks unusual compared with recent behavior.",
+      };
+      function stageEvidence(stage, verdict) {
+        if (stage.name === "S2 provenance") {
+          return stage.value >= 0.75
+            ? "Source evidence: recipient was found in untrusted invoice_vendor_x data. Taint value: 1.00, meaning fully untrusted."
+            : "Source evidence: recipient came from the trusted task or mandate. Taint value: 0.00, meaning trusted.";
+        }
+        if (stage.name === "S3 anomaly") {
+          const features = verdict.features || {};
+          const amountRatio = Number(
+            features.amount_over_rolling_median || 0,
+          ).toFixed(2);
+          const recentPayments = Number(
+            features.n_payments_last_60s || 0,
+          ).toFixed(0);
+          const budgetRatio = Number(features.window_spent_ratio || 0).toFixed(
+            2,
+          );
+          return `Source inputs: amount ratio = ${amountRatio}× typical recent payment; recent activity = ${recentPayments} payment(s) in the last 60 seconds; budget usage = ${budgetRatio} of the spending window already used.`;
+        }
+        return "";
+      }
+      function stageValueLabel(stage) {
+        if (stage.name === "S2 provenance") return "taint value";
+        if (stage.name === "S3 anomaly") return "anomaly score";
+        return "value";
+      }
       function showDetail(index) {
         const v = state.requests[index];
         if (!v) return;
@@ -761,7 +837,12 @@
           tab.tabIndex = tabIndex === index ? 0 : -1;
         });
         $("#detail").innerHTML =
-          `<div class="verdict-banner ${v.decision}"><strong>${v.decision === "block" ? "Blocked before execution" : "Allowed to execute"}</strong><span>${v.stages.some((s) => s.status === "fail") ? "A guard stage failed." : "No guard stage failed."} ${v.score > v.threshold ? `The combined score ${v.score.toFixed(2)} is above the ${v.threshold.toFixed(2)} threshold.` : `The combined score ${v.score.toFixed(2)} is at or below the ${v.threshold.toFixed(2)} threshold.`}</span></div><h2>Request #${v.seq}</h2><div class="row"><span>recipient</span><span>${short(v.recipient)}</span></div><div class="row"><span>amount</span><span>${money(v.amount)} USDC</span></div><div class="stage-flow">${v.stages.map((s, index) => `<div class="stage-card ${s.status}"><div class="stage-name"><span>${s.name}</span><small class="${s.status}">${s.status}</small></div><p>${s.detail}${s.value !== null ? " · " + s.value.toFixed(2) : ""}</p></div>${index < v.stages.length - 1 ? '<div class="stage-arrow">↓</div>' : ""}`).join("")}</div><div class="decision-rule"><strong>Decision rule:</strong> S0 and S1 are hard gates. A failure blocks immediately. If both pass, S2 and S3 contribute to the risk score.</div><div class="score-explain"><strong>What the score means:</strong> S3 measures behavioral anomaly, S2 measures untrusted provenance, and S1 can add a soft-policy flag.</div><div class="score-breakdown"><strong>Score calculation</strong><div class="score-formula">${scoreCalculation}</div><div>${hardGateFailed ? "The hard-gate decision takes priority over the threshold." : `Higher is more suspicious. Block when the result is above ${v.threshold.toFixed(2)}.`}</div></div><div class="row"><span>decision</span><span class="${v.decision}">→ ${v.decision.toUpperCase()}</span></div>`;
+          `<div class="verdict-banner ${v.decision}"><strong>${v.decision === "block" ? "Blocked before execution" : "Allowed to execute"}</strong><span>${v.stages.some((s) => s.status === "fail") ? "A guard stage failed." : "No guard stage failed."} ${v.score > v.threshold ? `The final risk score ${v.score.toFixed(2)} is above the block threshold ${v.threshold.toFixed(2)}, so the payment is blocked.` : `The final risk score ${v.score.toFixed(2)} is at or below the block threshold ${v.threshold.toFixed(2)}, so the payment can continue.`}</span></div><h2>Request #${v.seq}</h2><div class="row"><span>recipient</span><span>${short(v.recipient)}</span></div><div class="row"><span>amount</span><span>${money(v.amount)} USDC</span></div><div class="stage-flow">${v.stages.map((s, index) => `<div class="stage-card ${s.status}"><div class="stage-name"><span>${s.name}</span><small class="${s.status}">${s.status}</small></div><p><strong>${stageDescriptions[s.name]}</strong><br>${s.detail}${s.value !== null ? ` (${stageValueLabel(s)}: ${s.value.toFixed(2)})` : ""}${stageEvidence(s, v) ? `<br><span class="stage-evidence">${stageEvidence(s, v)}</span>` : ""}</p></div>${index < v.stages.length - 1 ? '<div class="stage-arrow">↓</div>' : ""}`).join("")}</div><div class="decision-rule"><strong>Decision rule:</strong> S0 and S1 are hard gates. A failure blocks immediately. If both pass, S2 and S3 contribute to the final risk score.</div><div class="score-explain"><strong>Score versus cutoff:</strong> the final score is compared with the selected block threshold here, after the score calculation above. A score above the cutoff blocks; a score at or below it continues.</div><div class="score-breakdown"><strong>Final score calculation</strong><div class="score-formula">${scoreCalculation}</div><div>${hardGateFailed ? "The hard-gate decision takes priority; the score is not used." : `Final score ${v.score.toFixed(2)} compared with cutoff ${v.threshold.toFixed(2)}: ${v.score > v.threshold ? "above, so BLOCK" : "at or below, so continue"}.`}</div></div><div class="row"><span>decision</span><span class="${v.decision}">→ ${v.decision.toUpperCase()}</span></div>`;
+        $(".verdict-banner span").textContent = v.stages.some(
+          (stage) => stage.status === "fail",
+        )
+          ? "A guard stage failed and explains the decision below."
+          : "All guard stages passed; the final score is explained below.";
         $("#invoice").textContent = v.invoice;
         $("#invoice").innerHTML = $("#invoice").innerHTML.replace(
           /(SYSTEM:[\s\S]*)/,
@@ -798,6 +879,9 @@
           "aria-expanded",
           String(!panel.hidden),
         );
+      };
+      $("#guard").onchange = () => {
+        $("#threshold-control").hidden = !$("#guard").checked;
       };
       function render(v) {
         $("#feed .empty")?.remove();
@@ -858,6 +942,10 @@
           body: JSON.stringify({
             scenario: $("#scenario").value,
             guard_on: $("#guard").checked,
+            threshold: Math.max(
+              0,
+              Math.min(1, Number($("#threshold").value) || 0.75),
+            ),
           }),
         });
         $("#status").textContent = "complete";
