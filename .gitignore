@@ -11,3 +11,4 @@ results/*.png
 results/*.csv
 results/*.jsonl
 results/*.json
+.vscode/
