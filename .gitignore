@@ -11,6 +11,3 @@ results/*.png
 results/*.csv
 results/*.jsonl
 results/*.json
-contracts/lib/
-contracts/out/
-contracts/cache/
