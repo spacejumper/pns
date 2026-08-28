@@ -14,9 +14,6 @@ class AgentRunOutput:
 class SimplePaymentAgent:
     """Minimal tool-using agent for deterministic experiments."""
 
-    def __init__(self, scripted: bool = True) -> None:
-        self.scripted = scripted
-
     def run(self, invoice_id: str, injected_payload: str | None = None) -> AgentRunOutput:
         invoice = fetch_invoice(invoice_id=invoice_id, injected_payload=injected_payload)
         if injected_payload:

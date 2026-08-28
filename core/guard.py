@@ -59,7 +59,12 @@ def evaluate_payment(*, seq: int, request: PaymentRequest, session: GuardSession
     ))
     taint = float(decision.features.get("taint_score", 0.0))
     policy_status = "fail" if policy_failed else ("score" if mandate_failed else "pass")
-    policy_detail = "recipient not in approved set" if policy_failed else "recipient and amount approved"
+    if "amount_above_max_per_tx" in reasons or "window_budget_exceeded" in reasons:
+        policy_detail = "amount exceeds approved limit"
+    elif "recipient_not_allowlisted" in reasons:
+        policy_detail = "recipient not in approved set"
+    else:
+        policy_detail = "recipient and amount approved"
     provenance_status = "fail" if taint >= 0.75 else "pass"
     provenance_detail = "first seen in untrusted invoice source" if provenance_status == "fail" else "trusted instruction or known source"
     if not decision.features:

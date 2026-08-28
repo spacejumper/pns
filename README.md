@@ -24,7 +24,7 @@ python -m experiments.run_latency
 python -m experiments.run_robustness
 ```
 
-Outputs are written to `results/` as CSV and JSONL telemetry.
+Outputs are written to `results/` as CSV files.
 
 4. (Optional) Generate placeholder offline baseline output:
 
@@ -88,7 +88,7 @@ anvil --block-time 1
 
 ## Repository map
 
-- `agentguard/`: guard, features, detectors, mandate, telemetry
+- `agentguard/`: guard, features, detectors, mandate, agent, tools
 - `attacks/`: injection and evasion scenarios
 - `workload/`: benign traffic generator
 - `experiments/`: C1/C3/C4 runners
@@ -99,8 +99,8 @@ anvil --block-time 1
 ## Reproducible workflow
 
 1. Run experiments to refresh `results/*.csv`.
-2. Start `agentguard-demo`.
-3. Validate that dashboard cards/tables reflect the new experiment outputs.
+2. Start the FastAPI web app with `uvicorn app:app --reload`.
+3. Validate that the dashboard reflects the new experiment outputs.
 
 ## Notes
 

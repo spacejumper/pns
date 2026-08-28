@@ -8,13 +8,10 @@ from workload.generator import generate_benign_payments
 
 
 def main() -> None:
-    guard, session, logger, llm_agent = bootstrap_session()
+    guard, session, llm_agent = bootstrap_session()
 
     records: list[Record] = []
-    seq = 0
-
     for payment in generate_benign_payments(n=1000):
-        seq += 1
         from agentguard.tools import pay
 
         req = pay(payment.recipient, payment.amount, f"{payment.category} payment")
@@ -24,7 +21,6 @@ def main() -> None:
 
     injections = [payload_a0(), payload_a1()]
     for i in range(120):
-        seq += 1
         payload = injections[i % len(injections)]
         out = llm_agent.run(invoice_id=f"inj-{i}", injected_payload=payload)
         decision = guard.evaluate(req=out.payment, session=session, tool_results=out.tool_results)

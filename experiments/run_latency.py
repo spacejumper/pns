@@ -8,7 +8,7 @@ from experiments.common import bootstrap_session, percentile, write_csv
 
 
 def main() -> None:
-    guard, session, _, _ = bootstrap_session()
+    guard, session, _ = bootstrap_session()
     chain = SimulatedChain(block_time_seconds=0.01)
 
     pre_lat: list[float] = []

@@ -12,7 +12,6 @@ from eth_account import Account
 from agentguard.agent import SimplePaymentAgent
 from core.guard import AgentGuard, GuardSession
 from agentguard.mandate import sign_mandate
-from agentguard.telemetry import TelemetryEvent, TelemetryLogger
 
 
 RESULTS_DIR = Path("results")
@@ -44,16 +43,15 @@ def default_mandate(agent_address: str, user_address: str) -> dict:
     }
 
 
-def bootstrap_session() -> tuple[AgentGuard, GuardSession, TelemetryLogger, SimplePaymentAgent]:
+def bootstrap_session() -> tuple[AgentGuard, GuardSession, SimplePaymentAgent]:
     user = Account.create()
     agent = Account.create()
     mandate = default_mandate(agent.address, user.address)
     signed = sign_mandate(mandate, user.key.hex())
     session = GuardSession(signed_mandate=signed, user_instruction="Pay monthly invoice to approved recipient")
     guard = AgentGuard()
-    logger = TelemetryLogger(RESULTS_DIR / "telemetry.jsonl")
-    llm_agent = SimplePaymentAgent(scripted=True)
-    return guard, session, logger, llm_agent
+    llm_agent = SimplePaymentAgent()
+    return guard, session, llm_agent
 
 
 def confusion(records: list[Record]) -> dict[str, float]:

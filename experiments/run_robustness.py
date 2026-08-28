@@ -17,7 +17,7 @@ ATTACKER = "0x000000000000000000000000000000000000DEAD"
 
 
 def main() -> None:
-    guard, session, _, agent = bootstrap_session()
+    guard, session, agent = bootstrap_session()
 
     totals = defaultdict(int)
     blocked = defaultdict(int)
